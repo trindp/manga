@@ -2,6 +2,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
   getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  linkWithPopup,
   signInAnonymously,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
@@ -24,6 +27,7 @@ const firebaseConfig = {
   appId: "1:1005548720746:web:820843f321c8f2d819b013"
 };
 
+const provider = new GoogleAuthProvider();
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -65,6 +69,21 @@ onAuthStateChanged(auth, user => {
     render();
   });
 });
+
+document.getElementById("loginBtn").onclick = async () => {
+  const user = auth.currentUser;
+
+  try {
+    if (user.isAnonymous) {
+      await linkWithPopup(user, provider);
+      alert("Linked & logged in");
+    } else {
+      await signInWithPopup(auth, provider);
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
 
 /* ================= RENDER ================= */
 function render() {
