@@ -1,18 +1,38 @@
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
   getFirestore,
   collection,
   doc,
   setDoc,
-  deleteDoc,
   onSnapshot,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const auth = window.auth;
-const db = window.db;
+/* ---------- FIREBASE INIT ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAFVrFg-k8LNrOyQnai9IFSTHbvENbLyvQ",
+  authDomain: "manga-library-13c90.firebaseapp.com",
+  projectId: "manga-library-13c90",
+  storageBucket: "manga-library-13c90.firebasestorage.app",
+  messagingSenderId: "1005548720746",
+  appId: "1:1005548720746:web:820843f321c8f2d819b013"
+};
 
-/* DOM */
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* ---------- SIGN IN ---------- */
+signInAnonymously(auth)
+  .then(() => console.log("Firebase signed in"))
+  .catch(err => console.error("Auth error", err));
+
+/* ---------- DOM ---------- */
 const grid = document.getElementById("mangaGrid");
 const modal = document.getElementById("modal");
 
@@ -26,9 +46,11 @@ let activeId = null;
 let dragIndex = null;
 let userCollection = null;
 
-/* ---------- AUTH ---------- */
+/* ---------- AUTH STATE ---------- */
 onAuthStateChanged(auth, user => {
   if (!user) return;
+
+  console.log("User UID:", user.uid);
 
   userCollection = collection(db, "users", user.uid, "manga");
 
@@ -66,14 +88,9 @@ function render() {
 
     card.addEventListener("dragstart", () => {
       dragIndex = index;
-      card.classList.add("dragging");
     });
 
-    card.addEventListener("dragend", () => {
-      card.classList.remove("dragging");
-      dragIndex = null;
-      saveOrder();
-    });
+    card.addEventListener("dragend", saveOrder);
 
     card.addEventListener("dragover", e => e.preventDefault());
 
@@ -134,11 +151,12 @@ document.getElementById("newCardBtn").onclick = async () => {
 
 /* ---------- ORDER SAVE ---------- */
 async function saveOrder() {
+  if (!userCollection) return;
+
   const batch = writeBatch(db);
 
   mangaList.forEach((m, i) => {
-    const ref = doc(userCollection, m.id);
-    batch.update(ref, { order: i });
+    batch.update(doc(userCollection, m.id), { order: i });
   });
 
   await batch.commit();
