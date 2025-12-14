@@ -2,10 +2,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
   getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  linkWithPopup,
-  signInAnonymously,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import {
@@ -27,7 +25,6 @@ const firebaseConfig = {
   appId: "1:1005548720746:web:820843f321c8f2d819b013"
 };
 
-const provider = new GoogleAuthProvider();
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -35,6 +32,10 @@ const db = getFirestore(app);
 /* ================= DOM ================= */
 const grid = document.getElementById("mangaGrid");
 const modal = document.getElementById("modal");
+const authModal = document.getElementById("authModal");
+
+const emailInput = document.getElementById("emailInput");
+const passwordInput = document.getElementById("passwordInput");
 
 const titleInput = document.getElementById("titleInput");
 const imageInput = document.getElementById("imageInput");
@@ -51,13 +52,15 @@ let activeId = null;
 let dragIndex = null;
 let userCollection = null;
 
-/* ================= AUTH ================= */
-signInAnonymously(auth).catch(console.error);
-
+/* ================= AUTH STATE ================= */
 onAuthStateChanged(auth, user => {
-  if (!user) return;
+  if (!user) {
+    authModal.style.display = "block";
+    return;
+  }
 
-  console.log("User UID:", user.uid);
+  console.log("Logged in UID:", user.uid);
+  authModal.style.display = "none";
 
   userCollection = collection(db, "users", user.uid, "manga");
 
@@ -70,19 +73,21 @@ onAuthStateChanged(auth, user => {
   });
 });
 
-document.getElementById("loginBtn").onclick = async () => {
-  const user = auth.currentUser;
+/* ================= AUTH ACTIONS ================= */
+document.getElementById("registerBtn").onclick = async () => {
+  await createUserWithEmailAndPassword(
+    auth,
+    emailInput.value,
+    passwordInput.value
+  );
+};
 
-  try {
-    if (user.isAnonymous) {
-      await linkWithPopup(user, provider);
-      alert("Linked & logged in");
-    } else {
-      await signInWithPopup(auth, provider);
-    }
-  } catch (err) {
-    console.error(err);
-  }
+document.getElementById("loginBtn").onclick = async () => {
+  await signInWithEmailAndPassword(
+    auth,
+    emailInput.value,
+    passwordInput.value
+  );
 };
 
 /* ================= RENDER ================= */
@@ -95,7 +100,7 @@ function render() {
     card.draggable = true;
 
     card.innerHTML = `
-      <img src="${m.img || "https://via.placeholder.com/400x600"}" />
+      <img src="${m.img || "https://via.placeholder.com/400x600"}">
       <div class="manga-info">
         <div class="manga-title">${m.title}</div>
         <div class="manga-desc">${m.desc}</div>
@@ -108,16 +113,11 @@ function render() {
       openEditor(m.id);
     };
 
-    card.addEventListener("dragstart", () => {
-      dragIndex = index;
-    });
-
+    card.addEventListener("dragstart", () => dragIndex = index);
     card.addEventListener("dragover", e => e.preventDefault());
-
     card.addEventListener("drop", () => {
-      const tmp = mangaList[dragIndex];
-      mangaList[dragIndex] = mangaList[index];
-      mangaList[index] = tmp;
+      [mangaList[dragIndex], mangaList[index]] =
+        [mangaList[index], mangaList[dragIndex]];
       saveOrder();
     });
 
@@ -143,12 +143,10 @@ function closeEditor() {
 }
 
 async function saveChanges() {
-  if (!activeId || !userCollection) return;
-
   const current = mangaList.find(m => m.id === activeId);
 
   await setDoc(doc(userCollection, activeId), {
-    title: titleInput.value || "Untitled",
+    title: titleInput.value,
     img: imageInput.value,
     link: linkInput.value,
     desc: descInput.value,
@@ -160,8 +158,6 @@ async function saveChanges() {
 
 /* ================= NEW CARD ================= */
 newCardBtn.onclick = async () => {
-  if (!userCollection) return;
-
   await setDoc(doc(userCollection), {
     title: "New Manga",
     img: "",
@@ -173,8 +169,6 @@ newCardBtn.onclick = async () => {
 
 /* ================= ORDER SAVE ================= */
 async function saveOrder() {
-  if (!userCollection) return;
-
   const batch = writeBatch(db);
 
   mangaList.forEach((m, i) => {
